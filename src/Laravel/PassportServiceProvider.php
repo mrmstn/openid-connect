@@ -55,7 +55,7 @@ class PassportServiceProvider extends Passport\PassportServiceProvider
             app(ClaimExtractor::class),
             Configuration::forSymmetricSigner(
                 app(config('openid.signer')),
-                InMemory::file($cryptKey->getKeyPath()),
+                InMemory::plainText($cryptKey->getKeyContents()),
             ),
             app(LaravelCurrentRequestService::class),
             $encryptionKey,
