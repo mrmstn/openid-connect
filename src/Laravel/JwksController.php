@@ -15,8 +15,8 @@ class JwksController
         $keyInfo = openssl_pkey_get_details(openssl_pkey_get_public($publicKey));
         $keyDetails = [
             'kty' => 'RSA',
-            'n' => rtrim(str_replace(['+', '/'], ['-', '_'], base64_encode($keyInfo['rsa']['n'])), '='),
-            'e' => rtrim(str_replace(['+', '/'], ['-', '_'], base64_encode($keyInfo['rsa']['e'])), '='),
+            'n' => $this->base64UrlEncode($keyInfo['rsa']['n']),
+            'e' => $this->base64UrlEncode($keyInfo['rsa']['e']),
         ];
         $keyDetails = $this->addKid($keyDetails);
 
@@ -63,6 +63,11 @@ class JwksController
         $hash = hash('sha256', $canonicalJwk, true);
 
         // Base64url encode
-        return str_replace(array('+', '/', '='), array('-', '_', ''), base64_encode($hash));
+        return $this->base64UrlEncode($hash);
+    }
+
+    private function base64UrlEncode($data): string
+    {
+        return rtrim(str_replace(['+', '/'], ['-', '_'], base64_encode($data)), '=');
     }
 }
