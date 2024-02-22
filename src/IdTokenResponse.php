@@ -21,6 +21,7 @@ class IdTokenResponse extends BearerTokenResponse
 {
     use CryptTrait;
 
+
     protected IdentityRepositoryInterface $identityRepository;
 
     protected ClaimExtractor $claimExtractor;
@@ -32,12 +33,13 @@ class IdTokenResponse extends BearerTokenResponse
      * @param string|Key|null $encryptionKey
      */
     public function __construct(
-        IdentityRepositoryInterface $identityRepository,
-        ClaimExtractor $claimExtractor,
-        Configuration $config,
+        IdentityRepositoryInterface    $identityRepository,
+        ClaimExtractor                 $claimExtractor,
+        Configuration                  $config,
         CurrentRequestServiceInterface $currentRequestService = null,
-        $encryptionKey = null,
-    ) {
+                                       $encryptionKey = null,
+    )
+    {
         $this->identityRepository = $identityRepository;
         $this->claimExtractor = $claimExtractor;
         $this->config = $config;
@@ -45,10 +47,33 @@ class IdTokenResponse extends BearerTokenResponse
         $this->encryptionKey = $encryptionKey;
     }
 
+    /**
+     * @return string
+     */
+    public function getThumbprint(): string
+    {
+        $keyInfo = openssl_pkey_get_details(openssl_get_privatekey($this->config->signingKey()->contents()));
+        $keyDetails = [
+            'kty' => 'RSA',
+            'n' => $this->base64UrlEncode($keyInfo['rsa']['n']),
+            'e' => $this->base64UrlEncode($keyInfo['rsa']['e']),
+        ];
+        $thumbprint = $this->getJwkThumbprint($keyDetails);
+        return $thumbprint;
+    }
+
+    public function getThumbprint2(): string
+    {
+        $key = $this->config->signingKey();
+        $jwk = json_decode($key->contents(), true); // Assuming the key contents are in JWK format.
+        return $this->getJwkThumbprint($jwk);
+    }
+
     protected function getBuilder(
         AccessTokenEntityInterface $accessToken,
-        IdentityEntityInterface $userEntity
-    ): Builder {
+        IdentityEntityInterface    $userEntity
+    ): Builder
+    {
         $dateTimeImmutableObject = new DateTimeImmutable();
 
         if ($this->currentRequestService) {
@@ -74,7 +99,7 @@ class IdTokenResponse extends BearerTokenResponse
         }
 
         $user = $this->identityRepository->getByIdentifier(
-            (string) $accessToken->getUserIdentifier(),
+            (string)$accessToken->getUserIdentifier(),
         );
 
         $builder = $this->getBuilder($accessToken, $user);
@@ -99,12 +124,39 @@ class IdTokenResponse extends BearerTokenResponse
             }
         }
 
+        $thumbprint = $this->getThumbprint();
+
+        $builder->withHeader('kid', $thumbprint);
+
         $token = $builder->getToken(
             $this->config->signer(),
             $this->config->signingKey(),
         );
 
         return ['id_token' => $token->toString()];
+    }
+
+    /**
+     * @param array $jwk
+     * @return string
+     *
+     * @see https://datatracker.ietf.org/doc/html/rfc7638
+     */
+    private function getJwkThumbprint(array $jwk): string
+    {
+        ksort($jwk); // Sort the keys to ensure that we generate always the same json.
+        $canonicalJwk = json_encode($jwk, JSON_UNESCAPED_SLASHES);
+
+        // Compute the SHA-256 hash of the canonical JWK
+        $hash = hash('sha256', $canonicalJwk, true);
+
+        // Base64url encode
+        return $this->base64UrlEncode($hash);
+    }
+
+    private function base64UrlEncode($data): string
+    {
+        return rtrim(str_replace(['+', '/'], ['-', '_'], base64_encode($data)), '=');
     }
 
     private function hasOpenIDScope(ScopeEntityInterface ...$scopes): bool
