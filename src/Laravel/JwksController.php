@@ -19,6 +19,7 @@ class JwksController
             'e' => $this->base64UrlEncode($keyInfo['rsa']['e']),
         ];
         $keyDetails = $this->addKid($keyDetails);
+        $keyDetails['alg'] = 'RS256';
 
         $jsonData = [
             'keys' => [
